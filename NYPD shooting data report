@@ -1,1 +1,171 @@
+---
+title: "NYPD Shooting Incident Data Report"
+date: '2022-04-26'
+output:
+  pdf_document: default
+  html_document: default
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Purpose
+
+This report is about analyzing the NYPD Shooting Incident Data (Historic). The specific dataset can be found here:  https://catalog.data.gov/dataset/nypd-shooting-incident-data-historic. I will focus on exploring two parts:
+
+1. Which area of New York has the most number of incidents?
+
+2. Which groups account for the most perpetrator and victims, respectively?
+
+## Step 0: Import Library
+
+First of all, we need to install some packages for the following analysis.
+
+```{r library, message = FALSE}
+# install.packages("tidyverse")
+# install.packages("lubridate")
+library(tidyverse)
+library(lubridate)
+```
+
+## Step 1: Import Data
+
+Now I will start by reading in the data from the csv file.
+
+```{r get_NYPD Shooting Incidengt_data}
+# Get current Data in the files.
+urls <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+NYPD_data <- read_csv(urls)
+# Take a quick look at the variables in the NYPD_data.
+head(NYPD_data)
+```
+
+## Step 2: Tidy and Transform Data
+
+After looking at NYPD_data, I would like to tidy those data. First, I will not use PRECINCT, JURISDICTION_CODE, LOCATION_DESC, X_COORD_CD, Y_COORD_CD, and Lon_Lat for the analysis I am planning, so I will get rid of those columns.
+
+```{r tidy_NYPD_data}
+NYPD_data <- NYPD_data %>%
+  select(INCIDENT_KEY,
+         OCCUR_DATE,
+         OCCUR_TIME,
+         BORO,
+         STATISTICAL_MURDER_FLAG,
+         PERP_AGE_GROUP,
+         PERP_SEX,
+         PERP_RACE,
+         VIC_AGE_GROUP,
+         VIC_SEX,
+         VIC_RACE,
+         Latitude,
+         Longitude)
+# return summary of the data
+summary(NYPD_data)
+```
+
+## Step 3: Data Analysis
+
+### Question 1：
+
+Count the occurrences of incidents in each borough to see which area of New York has the most number of incidents.
+
+```{r}
+# aggregate borough data
+boro_data <- as.data.frame(table(NYPD_data["BORO"]))
+# sort borough data by descending frequency
+boro_data[order(-boro_data$Freq),]
+
+# We also make a plot of borough data
+ggplot(NYPD_data, aes(x=BORO)) + 
+  geom_bar() + 
+  labs(title = "Boroughs of New York City",
+       x = "Boroughs of New York City",
+       y = "Count of Incidents") +
+  theme_minimal()
+```
+
+We can see that there have most incidents in Brooklyn, followed by Bronx and Queens, while Staten Island has the least.
+
+### Question 2：
+
+Count the age, sex, and race of both perpetrator and victims to see which groups account for the most perpetrator and victims.
+
+First I will count the PERP_AGE_GROUP and VIC_AGE_GROUP.
+
+```{r}
+# First count two age datasets
+PERP_age_data <- NYPD_data %>%
+group_by(PERP_AGE_GROUP) %>%
+count()
+PERP_age_data
+
+VIC_age_data <- NYPD_data %>%
+group_by(VIC_AGE_GROUP) %>%
+count()
+VIC_age_data
+```
+
+As we see, PERP_AGE_GROUP has four more categories than VIC_AGE_GROUP which are "1020", "224", "940" and "NA". This may be caused by input errors or other reasons. In order to facilitate us and combine two sets of data, we classify these four categories as "UNKNOWN". Then I will concatenate two results to display them in a bar chart.
+
+```{r}
+# isolate perpetrator age group
+PERP_age_data_1 <- NYPD_data["PERP_AGE_GROUP"]
+# replace <NA>, 1020, 224 and 940 by UNKNOWN
+PERP_age_data_1[is.na(PERP_age_data_1)] <- "UNKNOWN"
+PERP_age_data_1$PERP_AGE_GROUP[PERP_age_data_1$PERP_AGE_GROUP == "1020"] <- "UNKNOWN"
+PERP_age_data_1$PERP_AGE_GROUP[PERP_age_data_1$PERP_AGE_GROUP == "224"] <- "UNKNOWN"
+PERP_age_data_1$PERP_AGE_GROUP[PERP_age_data_1$PERP_AGE_GROUP == "940"] <- "UNKNOWN" 
+
+# aggregate perpetrator age group
+PERP_age_data_final <- table(PERP_age_data_1)
+# aggregate victim age group
+VIC_age_data <- table(NYPD_data["VIC_AGE_GROUP"])
+# concatenate perpetrator and victim
+age_data <- rbind(PERP_age_data_final, VIC_age_data)
+# display as a bar chart
+barplot(age_data, beside = TRUE)
+
+```
+
+Then we count the PERP_SEX and VIC_SEX.
+
+```{r}
+# aggregate perpetrator sex data
+PERP_sex_data <- table(NYPD_data["PERP_SEX"])
+# aggregate victim sex data
+VIC_sex_data <- table(NYPD_data["VIC_SEX"])
+# concatenate both perpetrator and victim
+sex_data <- rbind(PERP_sex_data, VIC_sex_data)
+# display as a bar chart
+barplot(sex_data, beside = TRUE)
+```
+
+Finally, we count the PERP_RACE and VIC_RACE.
+
+```{r}
+# aggregate the perpetrator race data
+PERP_race_data <- table(NYPD_data["PERP_RACE"])
+# aggregate the victim race data
+VIC_race_data <- table(NYPD_data["VIC_RACE"])
+# concatenate perpetrator and victim
+race_data <- rbind(PERP_race_data, VIC_race_data)
+# rename columns to shorter version
+colnames(race_data) <- c('American/Alaskan','Asian/Pacific','Black', 'Black Hisp', 'Unknown', 'White', 'White Hisp')
+# display as a bar chart
+barplot(race_data, beside = TRUE, las=2, cex.names=.75)
+```
+
+We can summarize the following three points from graphs. Firstly, the age group of 18-22 and 25-44 accounts for a large number of both perpetrators and victims.
+Secondly, there are more incidents with males than females in both perpetrator and victim groups. Thirdly, Black is significantly most represented category for both perpetrator and victim groups.
+
+## Step 4: Identify Bias
+
+In this report, since the initial data set is a record of reported incidents, the first bias is that not all incidents are reported. This dataset is collected by NYPD officers and NYC officials who may be biased in the collection, labeling, and reporting of this data. Another bias is from which I re-categorize <NA> as UNKNOWN.
+
+## Conclusion
+
+To conclude, I have answered both my questions from the analysis done above. The answers are as follows:
+
+1. There have most incidents in Brooklyn, followed by Bronx and Queens, while Staten Island has the least.
+2. The age group of 18-22 and 25-44 accounts for a large number of both perpetrators and victims. There are more incidents with males than females in both perpetrator and victim groups. And Black is significantly most represented category for both perpetrator and victim groups.
